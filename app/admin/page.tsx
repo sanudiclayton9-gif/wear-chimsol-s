@@ -17,13 +17,8 @@ import {
   query,
   serverTimestamp,
 } from "firebase/firestore";
-import {
-  getDownloadURL,
-  ref,
-  uploadBytes,
-} from "firebase/storage";
-import { auth, db, storage } from "@/lib/firebase";
-import { Design, Review } from "@/lib/types";
+import { auth, db } from "@/lib/firebase";
+import { Design } from "@/lib/types";
 
 export default function AdminPage() {
   const [user, setUser] = useState<User | null>(null);
@@ -95,21 +90,12 @@ function Login() {
 
 function Dashboard({ onLogout }: { onLogout: () => void }) {
   const [designs, setDesigns] = useState<Design[]>([]);
-  const [reviews, setReviews] = useState<Review[]>([]);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
-  const [photoFile, setPhotoFile] = useState<File | null>(null);
-  const [photoPreview, setPhotoPreview] = useState<string>("");
+  const [imageUrl, setImageUrl] = useState("");
   const [saving, setSaving] = useState(false);
-  const [uploadStatus, setUploadStatus] = useState("");
   const [formError, setFormError] = useState("");
-
-  function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0] ?? null;
-    setPhotoFile(file);
-    setPhotoPreview(file ? URL.createObjectURL(file) : "");
-  }
 
   useEffect(() => {
     const q = query(collection(db, "designs"), orderBy("createdAt", "desc"));
@@ -119,49 +105,27 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
     return () => unsub();
   }, []);
 
-  useEffect(() => {
-    const q = query(collection(db, "reviews"), orderBy("createdAt", "desc"));
-    const unsub = onSnapshot(q, (snap) => {
-      setReviews(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Review)));
-    });
-    return () => unsub();
-  }, []);
-
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
     setFormError("");
     const priceNum = Number(price);
-    if (!title.trim() || !description.trim() || !photoFile || !priceNum) {
-      setFormError("Fill in every field, choose a photo, and set a valid price.");
+    if (!title.trim() || !description.trim() || !imageUrl.trim() || !priceNum) {
+      setFormError("Fill in every field with a valid price.");
       return;
     }
     setSaving(true);
-    try {
-      setUploadStatus("Uploading photo...");
-      const path = `designs/${Date.now()}-${photoFile.name}`;
-      const storageRef = ref(storage, path);
-      await uploadBytes(storageRef, photoFile);
-      const imageUrl = await getDownloadURL(storageRef);
-
-      setUploadStatus("Saving design...");
-      await addDoc(collection(db, "designs"), {
-        title: title.trim(),
-        description: description.trim(),
-        imageUrl,
-        price: priceNum,
-        likeCount: 0,
-        createdAt: serverTimestamp(),
-      });
-
-      setTitle("");
-      setDescription("");
-      setPrice("");
-      setPhotoFile(null);
-      setPhotoPreview("");
-    } catch {
-      setFormError("Something went wrong uploading the photo. Try again.");
-    }
-    setUploadStatus("");
+    await addDoc(collection(db, "designs"), {
+      title: title.trim(),
+      description: description.trim(),
+      imageUrl: imageUrl.trim(),
+      price: priceNum,
+      likeCount: 0,
+      createdAt: serverTimestamp(),
+    });
+    setTitle("");
+    setDescription("");
+    setPrice("");
+    setImageUrl("");
     setSaving(false);
   }
 
@@ -204,27 +168,16 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
               />
             </div>
             <div className="field">
-              <label>Photo</label>
-              <input type="file" accept="image/*" onChange={handlePhotoChange} />
-              {photoPreview && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={photoPreview}
-                  alt="Preview"
-                  style={{
-                    marginTop: 10,
-                    width: 120,
-                    height: 150,
-                    objectFit: "cover",
-                    borderRadius: 4,
-                    border: "1px solid var(--border)",
-                  }}
-                />
-              )}
+              <label>Image URL</label>
+              <input
+                placeholder="Paste a link to the photo (e.g. uploaded to Google Photos, imgur)"
+                value={imageUrl}
+                onChange={(e) => setImageUrl(e.target.value)}
+              />
             </div>
             {formError && <p className="error-text">{formError}</p>}
             <button className="btn-block" disabled={saving}>
-              {saving ? uploadStatus || "Adding..." : "Add design"}
+              {saving ? "Adding..." : "Add design"}
             </button>
           </form>
         </div>
@@ -250,31 +203,6 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
                 >
                   Delete
                 </button>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <h2
-          style={{
-            fontFamily: "var(--font-display)",
-            marginTop: 40,
-            marginBottom: 14,
-          }}
-        >
-          Customer feedback ({reviews.length})
-        </h2>
-        <div className="admin-list">
-          {reviews.length === 0 && (
-            <p style={{ color: "var(--ink-soft)" }}>
-              No feedback submitted yet.
-            </p>
-          )}
-          {reviews.map((r) => (
-            <div className="admin-row review-row" key={r.id}>
-              <div className="admin-row-body">
-                <h4>{r.name}</h4>
-                <p>{r.message}</p>
               </div>
             </div>
           ))}
